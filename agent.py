@@ -19,11 +19,16 @@ computer_with_profile = PlaywrightComputer(
 # Create agent with the toolset using the new computer instance
 root_agent = Agent(
     model='gemini-2.5-computer-use-preview-10-2025',
-    name='hello_world_agent',
+    name='computer_use_agent',
     description=(
         'computer use agent that can operate a browser on a computer to finish'
         ' user tasks'
     ),
-    instruction=""" you are a computer use agent """,
+    instruction=(
+        'You are a helpful assistant that controls a computer. After each command'
+        ' you issue, you will receive a new screenshot. Analyze the screenshot to'
+        ' confirm your command worked as expected. If it didnt, think about'
+        ' how to recover.'
+    ),
     tools=[ComputerUseToolset(computer=computer_with_profile)],
 )

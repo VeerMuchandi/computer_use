@@ -295,6 +295,16 @@ class PlaywrightComputer(BaseComputer):
 
   async def navigate(self, url: str) -> ComputerState:
     await self._ensure_browser_is_running()
+    
+    # Fix common URL malformations from the model.
+    if url.startswith("https."):
+        url = "https://" + url[6:]
+    elif url.startswith("http."):
+        url = "http://" + url[5:]
+
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+
     await self._page.goto(url)
     await self._page.wait_for_load_state()
     return await self.current_state()
@@ -331,19 +341,43 @@ class PlaywrightComputer(BaseComputer):
     return await self.current_state()
 
   async def current_state(self) -> ComputerState:
+    import io
+    from PIL import Image
+
     await self._ensure_browser_is_running()
     await self._page.wait_for_load_state()
     # Even if Playwright reports the page as loaded, it may not be so.
     # Add a manual sleep to make sure the page has finished rendering.
     time.sleep(0.5)
-    screenshot_bytes = await self._page.screenshot(type="png", full_page=False)
+    screenshot_bytes = await self._page.screenshot(
+        type="jpeg", quality=80, full_page=False
+    )
     if not screenshot_bytes:
         print("Screenshot is empty, re-initializing...")
         await self.close(None, None, None)
         await self.initialize()
         await self._page.wait_for_load_state()
         time.sleep(0.5)
-        screenshot_bytes = await self._page.screenshot(type="png", full_page=False)
+        screenshot_bytes = await self._page.screenshot(
+            type="jpeg", quality=80, full_page=False
+        )
+
+    # Resize the screenshot to reduce prompt size
+    if screenshot_bytes:
+        img = Image.open(io.BytesIO(screenshot_bytes))
+        width, height = img.size
+        new_width = width // 2
+        new_height = height // 2
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        output_buffer = io.BytesIO()
+        img.save(output_buffer, format='JPEG')
+        screenshot_bytes = output_buffer.getvalue()
+
+    # Add a delay to reduce request rate
+    print("Waiting for 1 second to avoid rate limiting...")
+    time.sleep(1)
+
     return ComputerState(screenshot=screenshot_bytes, url=self._page.url)
 
   async def screen_size(self) -> tuple[int, int]:
